@@ -88,6 +88,13 @@ The fix is `TRIAGE_PAT`: a fine-grained personal access token scoped to
 `issues:write`, `contents:write`, and `pull-requests:write`, stored as
 a repo secret. That's the token `assign_copilot.py` needs to run.
 
+Store it with `gh secret set TRIAGE_PAT` and paste at the prompt. A PAT
+is worth more to an attacker than an API key, it acts as you across the
+repo, so the same rule from layer 6 is stricter here: the token goes in
+the GitHub secret store and nowhere else. Never in the YAML, never in a
+commit. Scope it to this one repo and set an expiry so a slip has a
+short blast radius.
+
 ## turning it on
 
 `.github/workflows/triage.yml` has the Copilot-assign step already

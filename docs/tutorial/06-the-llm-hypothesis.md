@@ -44,6 +44,12 @@ You'll be prompted to paste the key, it never touches your shell
 history this way. Locally, set the same variable in your environment
 before running the module by hand.
 
+Those are the only two places the key ever belongs: a GitHub secret for
+the workflow, or a local environment variable for hand runs. Never paste
+it into a file you commit. If you keep it in a `.env` for local work,
+confirm `.env` is git-ignored (it is, in this repo). See "never commit a
+token" in the README for why.
+
 Cost is one model call per issue that clears the confidence gate, not
 per issue. Most issues resolve in phase 1 and never reach this step.
 At tutorial volume that's cents, not dollars. If you want to trade

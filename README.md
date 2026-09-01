@@ -30,6 +30,28 @@ API key and a small per-issue spend. Layer 7 needs the Copilot seat.
 No other accounts. The payment vendor in the demo is fictional and
 stubbed locally.
 
+## never commit a token
+
+This tutorial has you handle two real credentials: an Anthropic API key
+(layer 6) and a GitHub token (layer 7). A leaked key gets scraped off
+public GitHub within minutes and billed to you. There are exactly two
+safe ways to handle either one, and both are used in this repo:
+
+1. **Keep it local and never check it in.** For anything you run on your
+   own machine, put the key in an environment variable or a `.env` file
+   that git ignores. `.env` is already in `.gitignore` here. The code
+   reads keys from the environment, never from a committed file.
+2. **Give it to GitHub the secure way.** For anything a workflow runs,
+   store the token as a GitHub Actions secret with `gh secret set NAME`.
+   Secrets are write-only, masked in logs, and never land in your files.
+   Workflows read them as `${{ secrets.NAME }}`.
+
+Never do the third thing: pasting a key into a YAML file, a Python file,
+a commit, or a `git push`. Turn on **Settings, Advanced Security, secret
+scanning and push protection** so GitHub blocks a token at push time if
+you slip. Both humans and coding agents slip on this, which is why the
+guardrails exist.
+
 ## start here
 
 The tutorial runs in layers, each with a checkpoint:

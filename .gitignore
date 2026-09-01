@@ -3,6 +3,10 @@ __pycache__/
 .pytest_cache/
 node_modules/
 dist/
+# never commit credentials — keep them in a local .env or a GitHub secret
+.env
+.env.*
+!.env.example
 # runtime artifacts from the queue stub and consumer
 data/queue/
 data/materialized/

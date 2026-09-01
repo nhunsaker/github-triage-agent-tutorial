@@ -176,6 +176,13 @@ this layer runs on the free tier with zero credentials beyond a GitHub
 account. `triage.run` writes `gate` and `service` to `$GITHUB_OUTPUT`,
 which the job exposes as outputs for the next job to read.
 
+Layers 6 and 7 do add credentials, an API key and a token, and the rule
+for both is the same one worth internalizing now: a credential lives in
+a GitHub secret (`gh secret set NAME`, read as `${{ secrets.NAME }}`) or
+in a local git-ignored `.env`, never in a file you commit. The README's
+"never commit a token" section is the short version. `GITHUB_TOKEN` here
+needs none of that because Actions mints and destroys it for you.
+
 ```yaml
   investigate:
     needs: triage
