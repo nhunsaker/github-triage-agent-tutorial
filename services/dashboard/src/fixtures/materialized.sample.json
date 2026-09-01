@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-09-01T14:32:00Z",
+  "orders": [
+    { "id": "ORD-10231", "customer": "J. Alvarez", "sku": "JJ-501-32x32", "status": "fulfilled", "total": 84.0, "placed_at": "2026-09-01T14:10:00Z" },
+    { "id": "ORD-10230", "customer": "R. Nguyen", "sku": "JJ-720-30x30", "status": "processing", "total": 96.5, "placed_at": "2026-09-01T14:02:00Z" },
+    { "id": "ORD-10229", "customer": "K. Delgado", "sku": "JJ-511-34x34", "status": "fulfilled", "total": 72.0, "placed_at": "2026-09-01T13:55:00Z" },
+    { "id": "ORD-10228", "customer": "M. Okafor", "sku": "JJ-505-30x32", "status": "cancelled", "total": 68.0, "placed_at": "2026-09-01T13:40:00Z" },
+    { "id": "ORD-10227", "customer": "S. Park", "sku": "JJ-501-32x32", "status": "fulfilled", "total": 84.0, "placed_at": "2026-09-01T13:22:00Z" }
+  ],
+  "stock": {
+    "series": [
+      { "sku": "JJ-501-32x32", "name": "Classic Straight 32x32", "on_hand": 42, "reserved": 5 },
+      { "sku": "JJ-511-34x34", "name": "Slim Taper 34x34", "on_hand": 18, "reserved": 3 },
+      { "sku": "JJ-505-30x32", "name": "Relaxed Fit 30x32", "on_hand": 6, "reserved": 1 },
+      { "sku": "JJ-720-30x30", "name": "High-Rise Straight 30x30", "on_hand": 27, "reserved": 4 }
+    ]
+  },
+  "returns": [
+    { "id": "RET-4021", "order_id": "ORD-10190", "sku": "JJ-720-30x30", "state": "requested", "reason": "wrong size" },
+    { "id": "RET-4020", "order_id": "ORD-10165", "sku": "JJ-501-32x32", "state": "approved", "reason": "changed mind" },
+    { "id": "RET-4019", "order_id": "ORD-10140", "sku": "JJ-511-34x34", "state": "completed", "reason": "defect" }
+  ]
+}

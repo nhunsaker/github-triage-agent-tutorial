@@ -1,0 +1,38 @@
+# The starter rulebook. Deliberately weak, ~31% routing on year 1.
+# You train this up in layer 3. Do not copy solutions/rulebook.yaml,
+# the loop is the lesson.
+#
+# A rule:
+#   id:          unique name, shows up in eval + triage comments
+#   match:       regex over title + body (case-insensitive)
+#   service / severity / routing:  any subset, what this rule claims
+#   confidence:  ground it in a mined contingency, not vibes
+#
+# Engine behavior: every matching rule bids; highest confidence per
+# dimension wins. Defaults when nothing matches: service unknown 0.20,
+# severity S2 0.30, routing human 0.30.
+
+rules:
+  - id: payflow-mention
+    match: "payflow"
+    service: billing
+    routing: external
+    confidence: 0.55
+
+  - id: checkout-broken
+    match: "checkout"
+    service: api
+    severity: S1
+    routing: internal
+    confidence: 0.50
+
+  - id: dashboard-mention
+    match: "dashboard"
+    service: dashboard
+    routing: internal
+    confidence: 0.40
+
+corroboration:
+  # external at S0 needs fleet-wide evidence (S1 stands on its signature)
+  min_reports: 3
+  window_hours: 48

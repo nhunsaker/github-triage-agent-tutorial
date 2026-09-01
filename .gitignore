@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+dist/
+# runtime artifacts from the queue stub and consumer
+data/queue/
+data/materialized/
+
+# internal build plan, not part of the tutorial
+PLAN.md

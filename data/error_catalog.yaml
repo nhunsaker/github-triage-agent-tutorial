@@ -1,0 +1,203 @@
+# The spine. One source of truth for every failure mode in Jane's Jeans.
+#
+# Services implement exactly these failures at these files and symbols.
+# The corpus generator emits issues quoting these signatures.
+# Rulebook rules key off them. The phase-2 evidence pass greps for them.
+#
+# Fields:
+#   id            stable key, referenced by corpus ground truth
+#   service       qr | api | dashboard | billing
+#   file          where the symbol lives (must exist, enforced by test)
+#   symbol        exception class / warning name (must exist, enforced by test)
+#   message       template quoted in issue bodies ({vars} filled by generator)
+#   severity      typical severity when this fires (S0 fleet / S1 core-broken /
+#                 S2 workaround exists / S3 cosmetic)
+#   routing       typical resolution routing: internal | external | human
+#   weight        relative frequency in the corpus
+#   year2_only    true = drift case, never appears in year 1
+#   notes         what makes this one interesting for triage
+
+catalog:
+  # ── qr — the Queue Reader ────────────────────────────────────────────
+  - id: QR-001
+    service: qr
+    file: services/qr/consumer.py
+    symbol: ConsumerLagWarning
+    message: "consumer lag exceeded {seconds}s on stream '{stream}'"
+    severity: S1
+    routing: internal
+    weight: 8
+    notes: >
+      The classic ambiguous one. Users report it as "dashboard numbers frozen",
+      which looks like a dashboard bug. Ground truth routes here.
+
+  - id: QR-002
+    service: qr
+    file: services/qr/handlers.py
+    symbol: PoisonMessageError
+    message: "poison message rejected after {attempts} attempts: event {event_id}"
+    severity: S2
+    routing: internal
+    weight: 5
+
+  - id: QR-003
+    service: qr
+    file: services/qr/dlq.py
+    symbol: DeadLetterOverflow
+    message: "dead-letter queue above threshold: {count} events waiting"
+    severity: S1
+    routing: internal
+    weight: 4
+
+  - id: QR-004
+    service: qr
+    file: services/qr/schema.py
+    symbol: EventSchemaError
+    message: "event schema mismatch on '{event_type}': expected v{expected} got v{got}"
+    severity: S2
+    routing: internal
+    weight: 4
+    notes: usually caused by an api deploy, resolved in qr. cross-service bait.
+
+  - id: QR-005
+    service: qr
+    file: services/qr/consumer.py
+    symbol: DuplicateEventWarning
+    message: "duplicate delivery detected for event {event_id}, skipping"
+    severity: S3
+    routing: internal
+    weight: 3
+
+  # ── api — orders + inventory ─────────────────────────────────────────
+  - id: API-001
+    service: api
+    file: services/api/inventory.py
+    symbol: OversellError
+    message: "stock below zero for sku {sku}: reserved {reserved}, on hand {on_hand}"
+    severity: S1
+    routing: internal
+    weight: 6
+    notes: race condition under load. flash-sale clusters use this.
+
+  - id: API-002
+    service: api
+    file: services/api/orders.py
+    symbol: OrderValidationError
+    message: "order rejected: {reason}"
+    severity: S3
+    routing: internal
+    weight: 7
+
+  - id: API-003
+    service: api
+    file: services/api/orders.py
+    symbol: CheckoutError
+    message: "checkout failed for cart {cart_id}: internal error"
+    severity: S1
+    routing: internal
+    weight: 6
+
+  - id: API-004
+    service: api
+    file: services/api/events.py
+    symbol: EventPublishError
+    message: "failed to publish '{event_type}' to stream '{stream}'"
+    severity: S1
+    routing: internal
+    weight: 5
+    notes: downstream symptom is identical to QR-001. corroboration matters.
+
+  - id: API-005
+    service: api
+    file: services/api/returns.py
+    symbol: ReturnStateError
+    message: "return {return_id} is in state '{state}', cannot {action}"
+    severity: S2
+    routing: internal
+    weight: 4
+
+  # ── dashboard — store-ops UI ─────────────────────────────────────────
+  - id: DASH-001
+    service: dashboard
+    file: services/dashboard/src/hooks/useOrders.js
+    symbol: StaleDataWarning
+    message: "orders feed stale for {minutes}m, showing cached data"
+    severity: S2
+    routing: internal
+    weight: 5
+    notes: >
+      the red herring twin of QR-001/API-004. dashboard shows this banner even
+      when the real fault is upstream. vague reports cluster here.
+
+  - id: DASH-002
+    service: dashboard
+    file: services/dashboard/src/components/StockChart.jsx
+    symbol: ChartRenderError
+    message: "TypeError: Cannot read properties of undefined (reading 'series')"
+    severity: S2
+    routing: internal
+    weight: 5
+
+  - id: DASH-003
+    service: dashboard
+    file: services/dashboard/src/state/filters.js
+    symbol: FilterStateError
+    message: "invalid filter combination: {filters}"
+    severity: S3
+    routing: internal
+    weight: 4
+
+  # ── billing — PayFlow integration ────────────────────────────────────
+  - id: BILL-001
+    service: billing
+    file: services/billing/payflow.py
+    symbol: PayFlowUnavailableError
+    message: "PayFlow API unreachable: 503 from {endpoint}"
+    severity: S0
+    routing: external
+    weight: 3
+    notes: >
+      the vendor-outage signature. incident clusters use this. corroboration
+      rule: external at S0 requires many reports in a short window; a single
+      report of a 503 is more likely a local network blip → human.
+
+  - id: BILL-002
+    service: billing
+    file: services/billing/webhooks.py
+    symbol: WebhookVerificationError
+    message: "webhook signature verification failed for delivery {delivery_id}"
+    severity: S1
+    routing: external
+    weight: 4
+    notes: >
+      the genuinely hard one. sometimes the vendor rotated keys (external),
+      sometimes we misconfigured (internal). resolutions split ~60/40.
+
+  - id: BILL-003
+    service: billing
+    file: services/billing/refunds.py
+    symbol: RefundDeclinedError
+    message: "refund declined by vendor for order {order_id}: code {code}"
+    severity: S2
+    routing: external
+    weight: 4
+
+  - id: BILL-004
+    service: billing
+    file: services/billing/payflow.py
+    symbol: PayFlowDeprecationError
+    message: "PayFlow v1 endpoint '{endpoint}' is deprecated, migrate to v2"
+    severity: S1
+    routing: external
+    weight: 4
+    year2_only: true
+    notes: the drift case. no year-1 rule can know about it. the flywheel's payoff.
+
+  - id: BILL-005
+    service: billing
+    file: services/billing/charges.py
+    symbol: DuplicateChargeError
+    message: "duplicate charge attempt blocked for order {order_id}"
+    severity: S1
+    routing: internal
+    weight: 3

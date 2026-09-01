@@ -1,0 +1,185 @@
+# The trained rulebook. Produced by running the layer-3 training protocol
+# on year 1: baseline → mine → write a rule → re-eval → read misses → repeat.
+#
+# Every confidence below is a mined year-1 contingency, not a vibe.
+# Notably ABSENT: any rule for the PayFlow v2 deprecation (BILL-004).
+# It does not exist in year 1. Year 2 pays for that, and the flywheel
+# is what fixes it. Do not "cheat" it in here.
+
+rules:
+  # ── signature rules: quoted errors are the strongest signal ────────
+  - id: sig-consumer-lag
+    match: "consumer lag exceeded"
+    service: qr
+    severity: S1
+    routing: internal
+    confidence: 0.94
+
+  - id: sig-poison-message
+    match: "poison message rejected"
+    service: qr
+    severity: S2
+    routing: internal
+    confidence: 0.92
+
+  - id: sig-dlq-overflow
+    match: "dead-letter queue above threshold"
+    service: qr
+    severity: S1
+    routing: internal
+    confidence: 0.90
+
+  - id: sig-schema-mismatch
+    match: "event schema mismatch"
+    service: qr
+    severity: S2
+    routing: internal
+    confidence: 0.84
+
+  - id: sig-duplicate-event
+    match: "duplicate delivery detected"
+    service: qr
+    severity: S3
+    routing: internal
+    confidence: 0.86
+
+  - id: sig-oversell
+    match: "stock below zero for sku"
+    service: api
+    severity: S1
+    routing: internal
+    confidence: 0.95
+
+  - id: sig-order-rejected
+    match: "order rejected:"
+    service: api
+    severity: S3
+    routing: internal
+    confidence: 0.95
+
+  - id: sig-checkout-failed
+    match: "checkout failed for cart"
+    service: api
+    severity: S1
+    routing: internal
+    confidence: 0.88
+
+  - id: sig-publish-failed
+    match: "failed to publish"
+    service: api
+    severity: S1
+    routing: internal
+    confidence: 0.92
+
+  - id: sig-return-state
+    match: "is in state '"
+    service: api
+    severity: S2
+    routing: internal
+    confidence: 0.94
+
+  - id: sig-stale-feed
+    match: "orders feed stale for"
+    service: dashboard
+    severity: S2
+    routing: internal
+    confidence: 0.90
+    # note: when this co-occurs with consumer-lag or publish-failed
+    # signatures, those bid higher — the banner is the symptom,
+    # the queue is the cause. mined table 1 backs this up.
+
+  - id: sig-chart-crash
+    match: "reading 'series'"
+    service: dashboard
+    severity: S2
+    routing: internal
+    confidence: 0.95
+
+  - id: sig-filter-state
+    match: "invalid filter combination"
+    service: dashboard
+    severity: S3
+    routing: internal
+    confidence: 0.95
+
+  - id: sig-payflow-unreachable
+    match: "PayFlow API unreachable"
+    service: billing
+    severity: S0
+    routing: external
+    confidence: 0.90
+    # S0 external → the corroboration rule decides. one lone 503 is a
+    # blip and gets downgraded to human; a 48h burst is an outage.
+
+  - id: sig-webhook-verification
+    match: "webhook signature verification failed"
+    service: billing
+    severity: S1
+    routing: external
+    confidence: 0.62
+    # mined: 62/38 external/internal. deliberately below theta so this
+    # class goes to phase 2. see the kw-payflow note below: a generic
+    # keyword rule must never outbid this specific signal.
+
+  - id: sig-refund-declined
+    match: "refund declined by vendor"
+    service: billing
+    severity: S2
+    routing: external
+    confidence: 0.95
+
+  - id: sig-duplicate-charge
+    match: "duplicate charge attempt blocked"
+    service: billing
+    severity: S1
+    routing: internal
+    confidence: 0.94
+
+  # ── keyword rules: for unsigned (vague) reports only in practice ───
+  # signature rules outbid these when a signature is present.
+  - id: kw-payflow
+    match: "payflow"
+    service: billing
+    routing: external
+    confidence: 0.60
+    # mined table 3: billing resolves external 82%, but unsigned
+    # payflow mentions are noisier. kept at 0.60, BELOW the weakest
+    # signature rule (sig-webhook-verification, 0.62): the first live
+    # issue whose title said "PayFlow" had this rule at 0.70 outbidding
+    # the specific webhook signal and acting at exactly theta on a
+    # 62/38 class. generic keyword rules bid under specific ones.
+
+  - id: kw-dashboard-vague
+    match: "dashboard|numbers look wrong|order count"
+    service: dashboard
+    routing: internal
+    confidence: 0.60
+
+  - id: kw-charged-twice
+    match: "charged twice|two receipts|double charge"
+    service: billing
+    severity: S1
+    routing: internal
+    confidence: 0.66
+
+  - id: kw-return-vague
+    match: "return"
+    service: api
+    routing: internal
+    confidence: 0.55
+
+  - id: kw-checkout-vague
+    match: "checkout|cant buy|cant complete a purchase"
+    service: api
+    severity: S1
+    routing: internal
+    confidence: 0.50
+    # mined: vague checkout reports resolve human 53% of the time
+    # (cant repro). kept low so these gate to phase 2.
+
+corroboration:
+  # an S0 external call requires fleet-wide evidence inside the window
+  # (S1 externals stand on their own signature).
+  # single report of a vendor 503 → human (probably a blip).
+  min_reports: 3
+  window_hours: 48

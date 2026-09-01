@@ -1,0 +1,65 @@
+# The flywheel, wired. Weekly sweep of closed issues → label-diff →
+# labels.jsonl → eval delta → a PR proposing the correction batch and
+# (when a cluster is big enough) a rulebook edit.
+#
+# The "retrain" is this PR. A human reviews it like any other change.
+#
+# Reader-built in layer 7 — this finished copy lives in solutions/ for
+# comparison. To activate: copy to .github/workflows/flywheel.yml.
+
+name: flywheel
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"   # mondays
+  workflow_dispatch: {}
+
+jobs:
+  flywheel:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+
+      - name: capture + accumulate label diffs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python solutions/flywheel.py accumulate --limit 100
+
+      - name: measure + suggest
+        run: |
+          python solutions/flywheel.py measure   | tee measure.txt
+          python solutions/flywheel.py suggest   | tee suggest.txt
+
+      - name: open the correction PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet triage/labels.jsonl; then
+            echo "no new corrections this week"; exit 0
+          fi
+          branch="flywheel/$(date +%Y-%m-%d)"
+          git checkout -b "$branch"
+          git add triage/labels.jsonl
+          git -c user.name=flywheel -c user.email=flywheel@users.noreply.github.com \
+            commit -m "flywheel: weekly correction batch"
+          git push origin "$branch"
+          {
+            echo "weekly label-diff sweep."
+            echo
+            echo '## corrections'
+            echo '```'; cat measure.txt; echo '```'
+            echo
+            echo '## proposed rulebook edits (apply by hand if they hold up)'
+            echo '```yaml'; cat suggest.txt; echo '```'
+          } > body.md
+          gh pr create --title "flywheel: correction batch $(date +%Y-%m-%d)" \
+            --body-file body.md
