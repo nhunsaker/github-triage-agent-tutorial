@@ -318,6 +318,84 @@ button, or nothing in this layer will ever fire.
 
 ![The Actions tab on a fresh fork, workflows disabled until you click the enable button](../images/01-fork-actions-disabled.png)
 
+Where all of this lands, concretely: `seed_issues.py` opens the tickets
+in the Issues tab of whichever repo you run it in, `gh` targets the
+current directory's remote. Each new issue trips the `on: issues`
+trigger, the run shows up in the Actions tab named after the issue's
+title, and about thirty seconds later the labels and the triage comment
+appear on the issue itself. Three tabs, one loop: Issues is where
+tickets live, Actions is where the workflow runs, and the issue page is
+where the verdict lands. Here's the whole verdict on one seeded issue:
+the bot's label-add event, the triage table with its confidences, the
+fired rule, and the gate message, with the same labels mirrored in the
+right sidebar.
+
+![A seeded issue after triage: labels applied, the triage comment with its dimension table, and the label set mirrored in the sidebar](../images/07-issue-triaged.png)
+
+## seed and check
+
+Predictions first, then reality. Before opening anything, ask the tool
+what the workflow should decide about each curated ticket. This runs
+the exact classify path the live workflow runs, same rulebook, same
+theta, no peeking at ground truth:
+
+```bash
+python3 tools/seed_issues.py --expect
+```
+
+```
+predictions against solutions/rulebook.yaml, theta 0.7
+
+[sig-confident] sold items we dont have in stock
+  expect labels: sev:S1 route:internal triage:confident service:api
+  expect gate:   act
+[sig-confident] 500 on checkout
+  expect labels: sev:S1 route:internal triage:confident service:api
+  expect gate:   act
+[sig-confident] dead letter queue filling up again
+  expect labels: sev:S1 route:internal triage:confident service:qr
+  expect gate:   act
+[sig-confident] refund declined by vendor
+  expect labels: sev:S2 route:external triage:confident service:billing
+  expect gate:   act
+[ambiguous] order counts frozen since 2pm
+  expect labels: sev:S2 route:internal triage:confident service:dashboard
+  expect gate:   act
+[ambiguous] dashboard not showing new orders
+  expect labels: sev:S1 route:internal triage:confident service:api
+  expect gate:   act
+[vague] checkout is broken, customers cant buy
+  expect labels: sev:S1 route:internal triage:investigating service:api
+  expect gate:   investigate  (phase 2 will run)
+[vague] numbers look wrong on the dashboard
+  expect labels: sev:S2 route:internal triage:investigating service:dashboard
+  expect gate:   investigate  (phase 2 will run)
+[hard] also seeing: webhook signature failures from PayFlow
+  expect labels: sev:S1 route:external triage:investigating service:billing
+  expect gate:   investigate  (phase 2 will run)
+[dupe] same as an earlier report i think: orders not reaching the queue
+  expect labels: sev:S1 route:internal triage:confident service:api
+  expect gate:   act
+
+open them, then compare: gh issue view <n> --json labels
+```
+
+Now open them for real and hold the workflow to its predictions:
+
+```bash
+python3 tools/create_labels.py        # once per fresh repo, labels must exist first
+python3 tools/seed_issues.py
+gh issue list --limit 10              # note the issue numbers
+gh issue view 3 --json labels --jq '.labels[].name'
+```
+
+Seven confident, three sent to phase 2, and the three that gate are
+exactly the ones a rulebook should be humble about: two vague reports
+and the webhook case whose corroboration rule wants fleet evidence
+before it trusts a single report. If a ticket comes back with different
+labels than predicted, read its triage comment first, the fired-rules
+line names which rule outbid the one you expected.
+
 ## Checkpoint
 
 Run the gate:

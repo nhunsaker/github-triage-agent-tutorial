@@ -185,6 +185,21 @@ looks at the issue next) and overrides only the routing call to
 `"human"`, so a `0.25` never quietly reads as a confident automated
 decision.
 
+You have that exact ticket live if you seeded layer 4: `checkout is
+broken, customers cant buy` gated with nothing in the body worth
+grepping. Pull it down and run it:
+
+```bash
+gh issue view <n> --json title,body,number > /tmp/vague.json
+python3 -m triage.investigate_llm --issue /tmp/vague.json --service api
+```
+
+Expect the honest shape, not a specific hypothesis: a low confidence
+around `0.2` to `0.3`, routing overridden to `human` by your guard,
+and suspect files that read like guesses because that's all the
+evidence supports. If your run comes back at `0.9` on that body,
+your prompt is inviting confidence instead of asking for calibration.
+
 ## checkpoint
 
 Run the gate:

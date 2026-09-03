@@ -36,6 +36,30 @@ a human closes the issue, the labels on it at that point are the
 ground truth the bot should have produced. The gap between the two is
 a training label.
 
+Where that correction physically happens: on the issue page, in the
+right sidebar, the Labels row with the gear icon next to it. Click the
+gear, uncheck the label the bot got wrong, check the right one, close
+the issue. That's the entire human interface to the flywheel. Nobody
+fills out a form or tags a training example, they fix a label the way
+they already would while closing out a ticket, and the machine block
+in the comment remembers what the bot had said.
+
+![The label picker open on a triaged issue: the bot's sev:S2 checked under Selected, the correct sev:S1 waiting under Suggestions](../images/06-labels-gear-correction.png)
+
+Try it on one of the
+layer-4 seeded tickets: the bot called `numbers look wrong on the
+dashboard` a `sev:S2`, so swap it to `sev:S1`, close the issue, and
+then:
+
+```bash
+python3 -m triage.flywheel capture --limit 20
+```
+
+One correction captured, `severity: S2 -> S1`, your click read back
+out of the label diff. The same edit from the command line is
+`gh issue edit <n> --remove-label sev:S2 --add-label sev:S1`, either
+door writes the same labels.
+
 ## step 1: capture
 
 Diff the bot's decision against the labels at close. The capture

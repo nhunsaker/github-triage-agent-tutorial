@@ -186,6 +186,20 @@ handoff offer. `triage/run.py` calls this same `build_dossier()` path
 whenever the rulebook's confidence falls below theta, so the live
 workflow in layer 4 is already wired to produce this on real issues.
 
+If you seeded the layer-4 tickets, you already have live subjects:
+`seed_issues.py --expect` predicted exactly three would gate, the two
+vague reports and the webhook one. Open any of them in the Issues tab
+and the dossier is sitting there as a workflow comment below the
+triage verdict. Compare it against a local run on the same issue:
+
+```bash
+gh issue view <n> --json title,body > /tmp/live.json
+python3 -m triage.investigate --issue /tmp/live.json --service billing
+```
+
+Same catalog hit, same cited file, the comment and your terminal
+agree because they run the same code.
+
 ### the heavy version
 
 Four services is small enough that one grep and one git log cover the
