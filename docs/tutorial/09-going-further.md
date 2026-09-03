@@ -93,6 +93,13 @@ Four things guard access, in order of how much they can do:
   to set up the repository ruleset that requests Copilot review.
   Nothing in the workflow needs a token for that, it's a repo setting.
 
+One more setting worth flipping while you're in there. Settings,
+Advanced Security, enable Secret Protection with push protection, so a
+key that slips into a commit gets blocked at push instead of scraped
+off public GitHub. Free on public repos.
+
+![The Advanced Security settings page with the Secret Protection and Code Security enable buttons](../images/05-advanced-security.png)
+
 ## honest limits
 
 - **rules plateau.** Layer 3 trains to roughly 80% and stops moving no

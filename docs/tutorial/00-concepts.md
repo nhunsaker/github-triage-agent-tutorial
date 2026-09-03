@@ -6,6 +6,11 @@ actually means when people say "action," and which of the two things
 called "Copilot" does which job. Get these confused and the later layers
 will not make sense.
 
+Here is the whole build on one page. Layers 3 and 4 build the top row,
+5 through 7 the middle row, and 8 the bottom one.
+
+![The tutorial map: phase 1 classifies and routes, phase 2 investigates below the gate, the flywheel turns drift into rules](../images/tutorial-flow.png)
+
 ## GitHub Actions, the vocabulary
 
 "GitHub Actions" is the automation platform built into GitHub. The word
@@ -61,6 +66,12 @@ It reviews in about 30 seconds and posts inline comments plus a summary.
 Automatic on every PR: create a repository ruleset. Repo Settings, Rules,
 Rulesets, New branch ruleset, target the default branch, enable "Request
 pull request review from Copilot."
+
+![The Rulesets page under repo Settings, where the New ruleset button lives](../images/04-rulesets.png)
+
+One honest caveat, visible in that screenshot: on a private repo inside
+an org, rulesets only enforce on a paid Team plan. On a public repo, or
+a personal private one, they enforce fine on the free tier.
 
 Draft PRs are skipped. The auto review fires when a PR is opened ready
 for review, or moved from draft to ready for review. Iterate freely in

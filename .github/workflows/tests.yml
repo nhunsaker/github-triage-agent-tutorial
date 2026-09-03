@@ -1,0 +1,45 @@
+# Two invariants, checked on every push:
+#   fresh-clone   the suite a reader sees on day one: green with skips,
+#                 one block per unbuilt chapter, never a failure
+#   answer-key    the same chapter gates run against solutions/, proving
+#                 the finished implementations stay correct
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fresh-clone:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: suite as a reader sees it (skips allowed, failures not)
+        run: python -m pytest tests/ -q
+
+  answer-key:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: chapter gates against solutions (no skips tolerated)
+        env:
+          TRIAGE_IMPL: solutions
+        run: |
+          python -m pytest tests/ -q
+          python -m pytest tests/chapters/ -q -rs | tee gate.txt
+          if grep -q "skipped" gate.txt; then
+            echo "answer key has an unimplemented gate"; exit 1
+          fi

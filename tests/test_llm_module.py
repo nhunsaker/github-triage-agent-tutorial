@@ -1,10 +1,14 @@
 """Offline checks for the LLM hypothesis module. No API calls here,
-the live behavior is exercised in layer 6 and by the Actions run."""
+the live behavior is exercised in layer 6 and by the Actions run.
+
+These run against solutions/ on purpose. They guard the repo's answer
+key, so they stay green while your triage/ copies are still stubs. The
+gates that watch YOUR code live in tests/chapters/."""
 
 import json
 
-from triage.investigate import build_dossier
-from triage.investigate_llm import (HYPOTHESIS_SCHEMA, gather_files, render)
+from solutions.investigate import build_dossier
+from solutions.investigate_llm import (HYPOTHESIS_SCHEMA, gather_files, render)
 
 
 FAKE_ISSUE = {

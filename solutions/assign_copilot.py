@@ -15,17 +15,6 @@ Needs TRIAGE_PAT (fine-grained: issues:write, contents:write,
 pull-requests:write) — GITHUB_TOKEN-triggered events deliberately
 don't chain automations, and the coding agent needs a real actor.
 
-This file is the starter. The gh/api plumbing (the `gql` runner, the
-REST node-id lookup, CLI parsing, the scoping comments, mode handling)
-is given, because this GraphQL surface is verify-against-live-docs
-territory, not the lesson, and live verification here is
-founder-gated. The two functions that ARE the lesson raise
-NotImplementedError until you write them: build_actor_lookup_query,
-build_assign_mutation. Layer 7 specs each one. Do not copy
-solutions/assign_copilot.py, the payload is the lesson.
-
-Your gate: pytest tests/chapters/test_ch07.py -q
-
 Usage: python -m triage.assign_copilot --issue 123 --service billing
 """
 
@@ -73,23 +62,17 @@ def gql(query, **variables):
 
 
 def build_actor_lookup_query(owner, repo):
-    """Build the GraphQL query + variables that find the Copilot
-    coding-agent bot's assignable-actor id.
-
-    Contract, from layer 7:
-      - query: `suggestedActors(capabilities: [CAN_BE_ASSIGNED],
-        first: 100)` under `repository(owner: $owner, name: $repo)`,
-        selecting `login`, `__typename`, and `id` (via inline fragments
-        `... on Bot { id }` and `... on User { id }`) for each node.
-        Declare `$owner: String!` and `$repo: String!`.
-      - variables: `{"owner": owner, "repo": repo}`.
-      - Return `(query, variables)`. The caller (`find_copilot_actor`)
-        runs it through `gql()` and scans
-        `data["repository"]["suggestedActors"]["nodes"]` for the node
-        whose `login` is `"copilot-swe-agent"`.
-      - `--mode` (fix vs investigate) does not touch this query.
-    """
-    raise NotImplementedError("chapter 7")
+    """Build the GraphQL query + variables for finding the Copilot
+    coding-agent bot's assignable-actor id."""
+    query = """
+    query($owner: String!, $repo: String!) {
+      repository(owner: $owner, name: $repo) {
+        suggestedActors(capabilities: [CAN_BE_ASSIGNED], first: 100) {
+          nodes { login __typename ... on Bot { id } ... on User { id } }
+        }
+      }
+    }"""
+    return query, {"owner": owner, "repo": repo}
 
 
 def find_copilot_actor(owner, repo):
@@ -110,26 +93,16 @@ def issue_node_id(owner, repo, number):
 
 
 def build_assign_mutation(issue_id, actor_id):
-    """Build the GraphQL mutation + variables that assign actor_id to
-    issue_id via replaceActorsForAssignable.
-
-    Contract, from layer 7:
-      - mutation name: `replaceActorsForAssignable`, called as
-        `replaceActorsForAssignable(input: {assignableId: $issueId,
-        actorIds: $actorIds})`, selecting back
-        `assignable { ... on Issue { number } }`. Declare
-        `$issueId: ID!` and `$actorIds: [ID!]!`.
-      - variables: `{"issueId": issue_id, "actorIds": actor_id}` —
-        pass `actor_id` through as given; GraphQL coerces a lone
-        scalar into a one-element list for the `[ID!]!` argument.
-      - `--mode` (fix vs investigate) changes the scoping COMMENT
-        posted before assignment (see SCOPING_COMMENT /
-        INVESTIGATE_COMMENT above), never this mutation, the payload
-        that assigns the actor is identical either way.
-      - Return `(query, variables)`. The caller (`assign`) runs it
-        through `gql()`.
-    """
-    raise NotImplementedError("chapter 7")
+    """Build the GraphQL mutation + variables that assigns actor_id to
+    issue_id via replaceActorsForAssignable."""
+    query = """
+    mutation($issueId: ID!, $actorIds: [ID!]!) {
+      replaceActorsForAssignable(
+        input: {assignableId: $issueId, actorIds: $actorIds}) {
+        assignable { ... on Issue { number } }
+      }
+    }"""
+    return query, {"issueId": issue_id, "actorIds": actor_id}
 
 
 def assign(issue_id, actor_id):

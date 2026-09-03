@@ -32,12 +32,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python solutions/flywheel.py accumulate --limit 100
+          python -m triage.flywheel accumulate --limit 100
 
       - name: measure + suggest
         run: |
-          python solutions/flywheel.py measure   | tee measure.txt
-          python solutions/flywheel.py suggest   | tee suggest.txt
+          python -m triage.flywheel measure   | tee measure.txt
+          python -m triage.flywheel suggest   | tee suggest.txt
 
       - name: open the correction PR
         env:

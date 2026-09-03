@@ -11,16 +11,6 @@ with grep and git. Builds a dossier:
 Always ends with the offer: "investigate further?" — even when
 confident. (The always-offer rule.)
 
-This file is the starter. The CLI, issue loading, the change/fleet
-evidence sources, and the dossier rendering are given, because
-plumbing gh events and formatting the machine-marker comment is not
-the lesson. The two functions that ARE the lesson raise
-NotImplementedError until you write them: grep_code, catalog_prior.
-Layer 5 specs each one. Do not copy solutions/investigate.py, the
-evidence trick is the lesson.
-
-Your gate: pytest tests/chapters/test_ch05.py -q
-
 Local:  python -m triage.investigate --issue path.json --service billing
 Action: python -m triage.investigate --event "$GITHUB_EVENT_PATH" \
             --service billing --post
@@ -40,27 +30,16 @@ ROOT = Path(__file__).resolve().parents[1]
 def catalog_prior(signature):
     """Match the signature back to the error catalog. The catalog knows
     each failure's typical routing — a grep hit on payflow.py is the
-    RAISE SITE of a vendor error, not evidence the fault is ours.
-
-    Contract, from layer 5:
-      - No signature (falsy) → return None. Never hallucinate a match.
-      - Load `data/error_catalog.yaml`'s `catalog` list.
-      - Each entry's `message` field is a template with {placeholder}
-        vars filled in by the corpus generator. Build a regex per
-        entry: escape the message with `re.escape`, then swap the
-        now-escaped placeholder braces (an escaped curly-brace pair
-        wrapping a lowercase/underscore name) for a non-greedy
-        wildcard (`.+?`). That's the placeholder-to-wildcard trick, it
-        turns "stock below zero for sku {sku}" into a pattern that
-        matches the issue's real, filled-in signature.
-      - Test entries in catalog order and return the first one whose
-        pattern matches the signature. First-match-wins, no scoring.
-      - Return the whole matching entry dict (id, service, file,
-        symbol, severity, routing, ...) so callers can cite file+symbol
-        straight from the catalog instead of re-deriving them. No
-        match anywhere in the catalog → return None.
-    """
-    raise NotImplementedError("chapter 5")
+    RAISE SITE of a vendor error, not evidence the fault is ours."""
+    if not signature:
+        return None
+    with open(ROOT / "data" / "error_catalog.yaml") as f:
+        entries = yaml.safe_load(f)["catalog"]
+    for e in entries:
+        pat = re.sub(r"\\\{[a-z_]+\\\}", ".+?", re.escape(e["message"]))
+        if re.search(pat, signature):
+            return e
+    return None
 
 
 def extract_signature(body):
@@ -74,30 +53,31 @@ def extract_signature(body):
 
 
 def grep_code(signature):
-    """Where in services/ does this error text live? Stable fragments only.
-
-    Contract, from layer 5:
-      - No signature (falsy) → return []. Never invent a location.
-      - The signature has a reporter's filled-in values baked in (ids,
-        paths, numbers, quoted values), and those never appear
-        verbatim in the source templates that raise the error. Strip
-        them out first, so only the stable literal words around them
-        survive: drop `/paths`, bare numbers, single- and
-        double-quoted spans, and long `snake_case`-ish tokens.
-      - From what's left, take up to the first 4 alphabetic words of
-        4+ characters. No words survive → return [] (nothing stable to
-        anchor on).
-      - Build one regex requiring those words to appear in order
-        (`.*` between each, each word `re.escape`d) and run
-        `grep -rn -E` over `services/` for it. Swallow timeout /
-        missing-grep errors as [] rather than raising.
-      - Parse at most the first 8 hit lines into dicts citing the REAL
-        location grep found: `file` (path relative to repo root),
-        `line`, and `code` (the matched line, trimmed to 100 chars).
-        No hallucinated paths — every hit must trace back to an actual
-        grep match, never a guess.
-    """
-    raise NotImplementedError("chapter 5")
+    """Where in services/ does this error text live? Stable fragments only."""
+    if not signature:
+        return []
+    # strip the variable parts: numbers, ids, quoted values
+    fragment = re.sub(r"/\S+|\b\d+\b|'[^']*'|\"[^\"]*\"|\b\w+_\w{4,}\b",
+                      " ", signature)
+    # only stable alphabetic words survive: filled-in values (ids, paths,
+    # numbers) exist in the issue but never in the source templates
+    words = [w for w in re.findall(r"[A-Za-z-]{4,}", fragment)][:4]
+    if not words:
+        return []
+    pattern = ".*".join(re.escape(w) for w in words)
+    try:
+        out = subprocess.run(
+            ["grep", "-rn", "-E", pattern, str(ROOT / "services")],
+            capture_output=True, text=True, timeout=30)
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return []
+    hits = []
+    for line in out.stdout.splitlines()[:8]:
+        path, _, rest = line.partition(":")
+        lineno, _, code = rest.partition(":")
+        hits.append({"file": str(Path(path).relative_to(ROOT)),
+                     "line": lineno, "code": code.strip()[:100]})
+    return hits
 
 
 def recent_commits(service):

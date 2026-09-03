@@ -1,5 +1,14 @@
 """The entrypoint the GitHub Action calls. Also the local dry-run harness.
 
+Layer 4 walks you through wiring the trained rulebook to Actions. The
+CLI, event/issue loading, and the live `gh` calls are given, because
+parsing argv and shelling out to gh is not the lesson. The two
+functions that ARE the lesson raise NotImplementedError until you
+write them: build_labels, build_comment. Layer 4 specs each one. Do
+not copy solutions/run.py, the wiring is the lesson.
+
+Your gate: pytest tests/chapters/test_ch04.py -q
+
 Live (in Actions):
   python -m triage.run --event "$GITHUB_EVENT_PATH"
 Local:
@@ -37,41 +46,62 @@ def load_issue(args):
 
 
 def build_labels(result, gate):
-    sev, _ = result["severity"]
-    svc, _ = result["service"]
-    route, _ = result["routing"]
-    labels = [f"sev:{sev}", f"route:{route}",
-              "triage:confident" if gate == "act" else "triage:investigating"]
-    if svc != "unknown":
-        labels.append(f"service:{svc}")
-    return labels
+    """Turn a classify() result + gate decision into the label set.
+
+    Contract, from layer 4 step 1:
+      - `result` is classify()'s return: {dimension: (value, confidence)}
+        for dims severity, service, routing (see triage/rulebook.py).
+      - `gate` is decide()'s return, the string "act" or "investigate".
+      - Always emit `sev:<severity>` and `route:<routing>` (the
+        route:/sev: prefixes are the label API create_labels.py
+        expects).
+      - Emit `service:<service>` too, prefixed `service:`, UNLESS the
+        service value is the "unknown" default, in which case skip it,
+        an unknown service is not worth a label.
+      - Emit `triage:confident` when gate == "act", otherwise
+        `triage:investigating`. This is the theta gate surfaced as a
+        label: decide() already compared routing confidence to THETA,
+        build_labels just encodes which side it landed on.
+      - Return the labels as a list. Order isn't load-bearing for
+        callers, but match sev, route, triage:*, service (when
+        present) so dry-run output is stable and matches the chapter.
+    """
+    raise NotImplementedError("chapter 4")
 
 
 def build_comment(issue, result, fired, gate):
-    machine = {
-        "v": 1,
-        "issue": issue["number"],
-        "decision": {dim: {"value": v, "confidence": c}
-                     for dim, (v, c) in result.items()},
-        "gate": gate,
-        "theta": THETA,
-        "fired": fired,
-    }
-    rows = "\n".join(
-        f"| {dim} | `{v}` | {c:.2f} |" for dim, (v, c) in result.items())
-    verdict = ("acting on this triage" if gate == "act"
-               else "confidence below threshold, starting an investigation")
-    return f"""<!-- triage:v1 {json.dumps(machine)} -->
-### triage
+    """Render the triage comment: human table + hidden machine block.
 
-| dimension | call | confidence |
-|---|---|---|
-{rows}
-
-rules fired: {', '.join(f'`{f}`' for f in fired) if fired else 'none (defaults)'}
-
-{verdict}. want a deeper look either way? comment `/investigate` on this issue.
-"""
+    Contract, from layer 4 step 2:
+      - Build `machine`, a dict: {"v": 1, "issue": issue["number"],
+        "decision": {dim: {"value": v, "confidence": c} for dim, (v, c)
+        in result.items()}, "gate": gate, "theta": THETA, "fired":
+        fired}. This is the exact shape the flywheel (layer 8) reads
+        back out of the comment. THETA is the module constant already
+        in scope, not a parameter. Iterate `result` in its given
+        order, it follows rulebook.DIMENSIONS, and the machine block,
+        the table rows, and the chapter's sample output all share it.
+      - Emit it as the comment's first line, wrapped in an HTML
+        comment tagged with a version: `<!-- triage:v1 {json} -->`
+        (json.dumps(machine), no extra whitespace requirements). The
+        marker is invisible when GitHub renders the comment but is
+        right there in the raw body for anything parsing activity to
+        read.
+      - Below the marker: a `### triage` heading, then a markdown
+        table with a header row `| dimension | call | confidence |`
+        and one row per dimension: `| {dim} | \\`{value}\\` |
+        {confidence:.2f} |`.
+      - A "rules fired" line: the fired rule ids backtick-quoted and
+        comma-joined, or the literal `none (defaults)` when `fired` is
+        empty.
+      - A closing verdict sentence: "acting on this triage" when
+        gate == "act", else "confidence below threshold, starting an
+        investigation" (this is the theta gate again, in prose this
+        time), followed by an invitation to comment `/investigate` on
+        the issue either way.
+      - Return the whole comment as one string.
+    """
+    raise NotImplementedError("chapter 4")
 
 
 def apply_live(issue_number, labels, comment):

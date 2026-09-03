@@ -10,26 +10,52 @@ a key for it, already name a suspect file or files. This layer hands
 that evidence to an agent that can open a branch and write the fix, the
 last and most capable rung of the three-phase investigation.
 
+This layer stays mostly guided. GitHub's assignment GraphQL is the most
+volatile surface in the whole tutorial, and confirming it still matches
+current docs is a live check, not something a fresh reader should be
+signing up to verify blind. One piece is still yours to build: the
+mutation payload itself.
+
 ## why GraphQL, not the REST shortcut
 
-`triage/assign_copilot.py` is one small file, deliberately. Open it.
-The obvious move is `gh issue edit --add-assignee "@copilot"`, and it
-has historically failed silently over REST, the call returns success
-and nothing gets assigned. The known-good path is two GraphQL calls:
+Your working copy is `triage/assign_copilot.py`. Open it. The obvious
+move is `gh issue edit --add-assignee "@copilot"`, and it has
+historically failed silently over REST, the call returns success and
+nothing gets assigned. The known-good path is two GraphQL calls:
 
 1. `suggestedActors(capabilities: [CAN_BE_ASSIGNED])` on the repo, to
    find the `copilot-swe-agent` bot's node id
 2. `replaceActorsForAssignable`, to assign that id to the issue
 
-`find_copilot_actor()` does the first call, `assign()` does the second.
-Both go through `gh api graphql`, so no new dependency beyond the `gh`
-CLI you already have.
+Almost everything here is given: the `gql()` runner, the REST node-id
+lookup, the CLI, the scoping comments, `--mode` handling. The one thing
+you write is the payload each call sends. `find_copilot_actor()` calls
+`build_actor_lookup_query()` for the first call, `assign()` calls
+`build_assign_mutation()` for the second, and those two functions raise
+`NotImplementedError` until you fill them in. Their docstrings pin the
+contract: the mutation name, the required variables (`assignableId` /
+`actorIds` for the assign mutation, `owner` / `repo` for the lookup),
+and that `--mode fix` versus `--mode investigate` changes the scoping
+comment posted beforehand, never the payload itself. Both go through
+`gh api graphql`, so no new dependency beyond the `gh` CLI you already
+have.
 
 This is the single most volatile surface in the whole tutorial. GitHub
 has moved assignment APIs before and can again. That's exactly why it
 lives in its own file instead of being inlined into the workflow: if it
 breaks, one file changes. Before you rely on this in a real repo,
 verify the call shape against GitHub's current docs, not this page.
+`solutions/assign_copilot.py` has the finished version, for comparison
+after you've built it.
+
+Your gate for this layer:
+
+```bash
+python3 -m pytest tests/chapters/test_ch07.py -q
+```
+
+It's pure and offline, no `gh` calls, no network, it only checks that
+the payloads you build carry the right shape and the right ids.
 
 ## monorepo scoping, two layers
 
@@ -88,6 +114,12 @@ The fix is `TRIAGE_PAT`: a fine-grained personal access token scoped to
 `issues:write`, `contents:write`, and `pull-requests:write`, stored as
 a repo secret. That's the token `assign_copilot.py` needs to run.
 
+Minting the token at Settings, Developer settings, Fine-grained
+tokens will bounce you through a sudo-mode confirmation first, passkey
+or password. That gate is expected, not an error.
+
+![GitHub's sudo-mode confirm-access screen, shown before the token form opens](../images/02-pat-sudo-gate.png)
+
 Store it with `gh secret set TRIAGE_PAT` and paste at the prompt. A PAT
 is worth more to an attacker than an API key, it acts as you across the
 repo, so the same rule from layer 6 is stricter here: the token goes in
@@ -138,6 +170,15 @@ access to production paths, or when the dossier's revised call is
 external and there's nothing to patch anyway.
 
 ## checkpoint
+
+Run the gate:
+
+```bash
+python3 -m pytest tests/chapters/test_ch07.py -q
+```
+
+Three green, none skipped, once `build_actor_lookup_query` and
+`build_assign_mutation` are filled in.
 
 With the seat and the ruleset live, a low-confidence issue should walk
 itself from dossier to assignment to PR to requested review with no

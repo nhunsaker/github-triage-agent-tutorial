@@ -1,0 +1,90 @@
+# Triage every new issue: label + comment always, phase 2 when gated.
+#
+# Token facts (taught in layer 4):
+#   - default GITHUB_TOKEN is enough for labels + comments
+#   - the Copilot assign step (phase 2b) needs TRIAGE_PAT, a fine-grained
+#     PAT with issues:write + contents:write + pull-requests:write —
+#     GITHUB_TOKEN-triggered events deliberately don't chain automations
+#   - loop prevention: we skip bot-authored issues explicitly too
+
+name: triage
+
+on:
+  issues:
+    types: [opened]
+
+concurrency:
+  group: triage-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    if: ${{ !endsWith(github.actor, '[bot]') }}
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      gate: ${{ steps.classify.outputs.gate }}
+      service: ${{ steps.classify.outputs.service }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: classify + route (phase 1)
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRIAGE_RULEBOOK: solutions/rulebook.yaml
+        run: |
+          python -m triage.run --event "$GITHUB_EVENT_PATH" \
+            --rulebook "$TRIAGE_RULEBOOK"
+
+  investigate:
+    needs: triage
+    if: ${{ needs.triage.outputs.gate == 'investigate' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: evidence dossier (phase 2a — free tier)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -m triage.investigate \
+            --event "$GITHUB_EVENT_PATH" \
+            --service "${{ needs.triage.outputs.service }}" \
+            --post
+
+      # phase 2b — LLM hypothesis. needs one repo secret:
+      #   gh secret set ANTHROPIC_API_KEY
+      # the step soft-skips (exit 0 with a note) when the secret is
+      # absent, so free-tier readers lose nothing. layer 6.
+      - name: LLM hypothesis (phase 2b — one API key)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python -m triage.investigate_llm \
+            --event "$GITHUB_EVENT_PATH" \
+            --service "${{ needs.triage.outputs.service }}" \
+            --post
+
+      # phase 2c — Copilot coding agent. uncomment when the repo has a
+      # Copilot seat and TRIAGE_PAT is set (layer 7 of the tutorial).
+      # add --mode investigate for a report-only PR instead of a fix.
+      # - name: hand off to the Copilot coding agent (phase 2c)
+      #   env:
+      #     GH_TOKEN: ${{ secrets.TRIAGE_PAT }}
+      #   run: |
+      #     python -m triage.assign_copilot \
+      #       --issue "${{ github.event.issue.number }}" \
+      #       --service "${{ needs.triage.outputs.service }}"

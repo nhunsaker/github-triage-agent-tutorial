@@ -1,6 +1,5 @@
-"""Phase 2b: the LLM hypothesis. Layer 6 walks you through building this
-yourself in three steps, once the phase-2a dossier and suspect files
-are already in hand:
+"""Phase 2b: the LLM hypothesis, finished version. Layer 6 walks you
+through building this yourself in three steps:
 
   build_prompt         turn the dossier + suspect files into the prompt
   validate_hypothesis  check the model's structured answer against the
@@ -14,28 +13,12 @@ Claude for a hypothesis: what broke, where, internal or external, and
 a fix direction. Posts it as a comment. The coding-agent hand-off
 (phase 2c) stays optional above this.
 
-This file is the starter. The anthropic SDK plumbing, client
-construction, the model id, the adaptive-thinking API call itself, is
-given, because calling the API is not the lesson. So is the
-soft-skip-without-ANTHROPIC_API_KEY safety rail in main(): that guard
-keeps the pipeline usable with no key at all, and it is a safety rail,
-not a lesson, so it must keep behaving identically as you edit the rest
-of this file. `gather_files`, `render`, and `HYPOTHESIS_SCHEMA` are
-given too, and stay fully working, `tests/test_llm_module.py` imports
-all three at load time. The three functions that ARE the lesson raise
-NotImplementedError until you write them: build_prompt,
-validate_hypothesis, apply_refusal_guard. Layer 6 specs each one. Do
-not copy solutions/investigate_llm.py, the prompt, the validation, and
-the guard are the lesson.
-
-Your gate: pytest tests/chapters/test_ch06.py -q
-
 Needs ANTHROPIC_API_KEY (repo secret in Actions, env var locally).
 This module is the only place the provider appears: swapping providers
 means swapping this one file.
 
-Local:  python -m triage.investigate_llm --issue path.json --service billing
-Action: python -m triage.investigate_llm --event "$GITHUB_EVENT_PATH" \
+Local:  python -m solutions.investigate_llm --issue path.json --service billing
+Action: python -m solutions.investigate_llm --event "$GITHUB_EVENT_PATH" \
             --service billing --post
 """
 
@@ -48,7 +31,7 @@ from pathlib import Path
 
 import anthropic
 
-from triage.investigate import build_dossier
+from solutions.investigate import build_dossier
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL = os.environ.get("TRIAGE_LLM_MODEL", "claude-opus-4-8")
@@ -89,8 +72,6 @@ HYPOTHESIS_SCHEMA = {
 }
 
 
-# ── step 0: plumbing (given) ─────────────────────────────────────────
-
 def gather_files(dossier, service):
     """The code the model reads: dossier hits first, then the catalog
     prior's file, capped hard so the prompt stays small."""
@@ -112,92 +93,99 @@ def gather_files(dossier, service):
     return out
 
 
-# ── step 1: build_prompt ─────────────────────────────────────────────
-
 def build_prompt(issue, service, dossier, files):
     """Turn the dossier and suspect files into the one prompt the model
-    sees. No tool calls, no follow-up turns, this is a single
-    structured-output request, so everything the model needs to reason
-    about has to be in this one string.
+    sees."""
+    file_blocks = "\n\n".join(
+        f"--- {path} ---\n{text}" for path, text in files
+    ) or "(no source files matched the signature)"
+    evidence = json.dumps({
+        "signature": dossier["signature"],
+        "catalog_prior": dossier.get("prior"),
+        "fleet_similar_reports": len(dossier["fleet"]),
+        "evidence_for": dossier["evidence_for"],
+        "evidence_against": dossier["evidence_against"],
+        "deterministic_verdict": dossier["revised"],
+    }, indent=2)
 
-    Contract, from layer 6 step 1:
-      - Render `files` (a list of (path, text) tuples) as
-        `--- {path} ---\\n{text}` blocks joined by a blank line, falling
-        back to the literal string "(no source files matched the
-        signature)" when `files` is empty.
-      - Render the dossier's evidence as a JSON object (`json.dumps`,
-        `indent=2`) with these keys: `signature` (dossier["signature"]),
-        `catalog_prior` (dossier.get("prior")), `fleet_similar_reports`
-        (len(dossier["fleet"])), `evidence_for` (dossier["evidence_for"]),
-        `evidence_against` (dossier["evidence_against"]),
-        `deterministic_verdict` (dossier["revised"]).
-      - Build one prompt string containing, in order: the pipeline's
-        framing (a four-service monorepo, qr, api, dashboard, billing,
-        a deterministic pass already ran, your job is issue plus
-        evidence plus code produces a hypothesis), the ground rules (a
-        grep hit can be a vendor error's RAISE SITE and not the cause,
-        confidence must be honest, routing "human" is valid when
-        evidence is thin), the issue number and title and body, the
-        evidence JSON, and the file blocks.
-      - Return the prompt as a single string.
-    """
-    raise NotImplementedError("chapter 6")
+    return f"""You are the investigation step of an issue-triage pipeline for a
+monorepo with four services (qr = queue reader, api, dashboard, billing).
+A deterministic pass already gathered evidence. Your job: read the issue,
+the evidence, and the suspect source code, then produce a hypothesis.
 
+Rules:
+- a grep hit can be the RAISE SITE of a vendor-side error, not the cause.
+  If the catalog prior says external and the fleet corroborates, the code
+  match does not make it internal.
+- confidence must be honest. Low evidence means low confidence.
+- routing "human" is a valid answer when the evidence is thin.
 
-# ── step 2: validate_hypothesis ──────────────────────────────────────
+ISSUE #{issue['number']}: {issue['title']}
+
+{issue.get('body', '')}
+
+DETERMINISTIC EVIDENCE:
+{evidence}
+
+SUSPECT SOURCE FILES:
+{file_blocks}"""
+
 
 def validate_hypothesis(verdict):
-    """Check the model's parsed JSON against the contract we asked
-    `output_config.format` to enforce. Structured outputs make this
-    validation redundant in the common case, but "the API guarantees
-    it" and "verify it before you trust it" are different claims, and
-    this pipeline posts the result straight to a public issue tracker.
+    """Check the model's parsed JSON against HYPOTHESIS_SCHEMA. Raises
+    ValueError naming the problem; returns `verdict` unchanged when it
+    conforms."""
+    required = set(HYPOTHESIS_SCHEMA["required"])
+    allowed = set(HYPOTHESIS_SCHEMA["properties"].keys())
+    keys = set(verdict.keys())
+    if keys != allowed:
+        missing = required - keys
+        extra = keys - allowed
+        problems = []
+        if missing:
+            problems.append(f"missing {sorted(missing)}")
+        if extra:
+            problems.append(f"unexpected {sorted(extra)}")
+        raise ValueError(f"hypothesis does not match schema: {'; '.join(problems)}")
 
-    Contract, from layer 6 step 2:
-      - `verdict` is a dict already parsed from the model's JSON text.
-      - Every key in HYPOTHESIS_SCHEMA["required"] must be present, and
-        no other keys may be present (HYPOTHESIS_SCHEMA sets
-        additionalProperties to False, mirror that here).
-      - `routing` must be one of
-        HYPOTHESIS_SCHEMA["properties"]["routing"]["enum"].
-      - `confidence` must be an int or float in the closed range
-        [0.0, 1.0].
-      - `suspect_files` must be a list, and every item in it a string.
-      - `hypothesis` and `fix_direction` must be non-empty strings.
-      - Raise ValueError, with a message naming what is wrong, on any
-        violation. Otherwise return `verdict` unchanged, so callers can
-        chain it straight into the next step.
-    """
-    raise NotImplementedError("chapter 6")
+    routing_enum = HYPOTHESIS_SCHEMA["properties"]["routing"]["enum"]
+    if verdict["routing"] not in routing_enum:
+        raise ValueError(f"routing {verdict['routing']!r} not in {routing_enum}")
 
+    confidence = verdict["confidence"]
+    if not isinstance(confidence, (int, float)) or isinstance(confidence, bool):
+        raise ValueError(f"confidence must be a number, got {confidence!r}")
+    if not (0.0 <= confidence <= 1.0):
+        raise ValueError(f"confidence {confidence} out of range [0.0, 1.0]")
 
-# ── step 3: apply_refusal_guard ──────────────────────────────────────
+    suspect_files = verdict["suspect_files"]
+    if not isinstance(suspect_files, list) or not all(
+            isinstance(f, str) for f in suspect_files):
+        raise ValueError("suspect_files must be a list of strings")
+
+    for field in ("hypothesis", "fix_direction"):
+        if not isinstance(verdict[field], str) or not verdict[field].strip():
+            raise ValueError(f"{field} must be a non-empty string")
+
+    return verdict
+
 
 def apply_refusal_guard(verdict):
     """The honest fallback: a refusal and a low-confidence hypothesis
     both get routed to a human instead of a confident-sounding
-    automated call. A hypothesis step that gets rewarded for sounding
-    sure of itself is worse than no hypothesis step.
-
-    Contract, from layer 6 step 3:
-      - `verdict` is either None (the model refused,
-        `response.stop_reason == "refusal"`) or a dict already checked
-        by validate_hypothesis.
-      - None in, a synthetic verdict out: {"hypothesis": a sentence
-        saying the model declined to venture a hypothesis for this
-        issue, "routing": "human", "confidence": 0.0, "suspect_files":
-        [], "fix_direction": a sentence saying a human should review
-        this issue directly}.
-      - A verdict whose confidence is below CONFIDENCE_FLOOR (0.3),
-        the same dict, but with "routing" forced to "human", the
-        model's own hypothesis, confidence, suspect files, and fix
-        direction all pass through unchanged. Low confidence should not
-        drive an internal or external call on its own, but it is still
-        honest evidence, so nothing else about the verdict gets thrown
-        away.
-      - Otherwise: `verdict` unchanged.
-    """
-    raise NotImplementedError("chapter 6")
+    automated call."""
+    if verdict is None:
+        return {
+            "hypothesis": "the model declined to venture a hypothesis for "
+                          "this issue",
+            "routing": "human",
+            "confidence": 0.0,
+            "suspect_files": [],
+            "fix_direction": "a human should review this issue directly",
+        }
+    if verdict["confidence"] < CONFIDENCE_FLOOR:
+        return dict(verdict, routing="human")
+    return verdict
 
 
 def ask_claude(issue, service, dossier, files):

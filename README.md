@@ -15,6 +15,28 @@ You train the rulebook yourself, wire it to Actions, watch it hit a
 wall around 80%, and build the flywheel that turns human corrections
 into rulebook improvements. The wall is the point.
 
+![The whole tutorial on one page: phase 1 classifies and routes, phase 2 investigates below the confidence gate, and the flywheel turns year-2 drift into the rule that fixes it](docs/images/tutorial-flow.png)
+
+## how this tutorial works
+
+You write the code. Each layer's working file lives in `triage/` with
+the plumbing given and the core functions stubbed. A stub raises
+`NotImplementedError` with its chapter number, and its docstring is the
+contract you build to. The finished versions live in `solutions/`, for
+comparison after, not before.
+
+The test suite is the progress meter. A fresh clone runs green with a
+block of skips, one per unwritten chapter:
+
+```bash
+python -m pytest tests/ -q
+# 27 passed, 38 skipped   <- skips tick down as you build
+```
+
+Each chapter ends with its own gate, `pytest tests/chapters/test_ch0N.py -q`.
+All green means your implementation matches the chapter's numbers, and
+the skips in the full suite drop with it.
+
 ## prereqs
 
 - a GitHub account and the `gh` CLI, authed
@@ -71,7 +93,7 @@ The tutorial runs in layers, each with a checkpoint:
 
 ```bash
 pip install -r requirements.txt
-python -m pytest tests/ -q          # everything green
+python -m pytest tests/ -q          # green, plus one skip block per unbuilt chapter
 python tools/mine_patterns.py       # the signal tables
 python -m triage.eval --year 1 --rulebook triage/rulebook.starter.yaml
 ```

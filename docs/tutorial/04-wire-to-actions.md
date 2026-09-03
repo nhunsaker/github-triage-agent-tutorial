@@ -1,11 +1,25 @@
 # 4. Wire it to Actions
 
 You have a trained rulebook. This layer gets it running against real
-issues, but it starts offline: a dry-run harness and a replay tool that
-exercise the exact same code path the live workflow uses, no GitHub
-account touched. Only the last step opens the live workflow, and it
-needs no PAT, the default `GITHUB_TOKEN` covers everything through this
-layer.
+issues, wiring `classify` and `decide`, both finished in layer 3, into
+`triage/run.py`, the script Actions calls on every new issue. The CLI,
+event and issue loading, and the live `gh` calls are given, because
+parsing argv and shelling out to gh is not the lesson. Two functions
+are yours: `build_labels`, which turns a decision into the label set,
+and `build_comment`, which renders the human-readable table plus a
+hidden machine block. Each one's docstring in `triage/run.py` is its
+contract. `solutions/run.py` is the finished version, for comparison
+after you've written both, not before.
+
+Your gate for this layer:
+
+```bash
+python3 -m pytest tests/chapters/test_ch04.py -q
+```
+
+On a fresh clone every test in it skips with "chapter 4 not started".
+As you land `build_labels` and then `build_comment`, the matching
+tests flip from skipped to green.
 
 ## Do this: dry-run a single issue
 
@@ -16,6 +30,11 @@ issue would never have one, and run it through:
 ```
 python -m triage.run --issue /tmp/issue3.json --dry-run --rulebook solutions/rulebook.yaml
 ```
+
+Until `build_labels` and `build_comment` exist, this dies with
+`NotImplementedError: chapter 4`. That's the shape of this whole layer,
+the scaffold runs, the two functions are yours. Once you've written
+them it prints:
 
 ```
 issue #3: sold items we dont have in stock
@@ -58,7 +77,9 @@ issue, different outcome, entirely offline.
 ## Do this: replay a slice of the corpus
 
 `triage/replay.py` streams any year through the same classify-and-gate
-path, no per-issue file needed:
+path, no per-issue file needed. It calls `classify` and `decide`
+directly, not `build_labels` or `build_comment`, so it runs today
+regardless of where you are in this layer:
 
 ```
 python -m triage.replay --year 1 --rulebook solutions/rulebook.yaml --limit 15
@@ -113,7 +134,13 @@ not the first.
 
 ## The workflow, block by block
 
-`.github/workflows/triage.yml` fires on `issues.opened`:
+`.github/workflows/triage.yml` fires on `issues.opened`. That file
+belongs to the lead, don't edit it, but its shape is what this chapter
+is wiring toward, and two of its step bodies are the same work you just
+did in `triage/run.py`, restated as CI plumbing. Below is that shape
+with those two blanked to `# YOU: ...`. Work out what each one runs,
+then check yourself against `solutions/triage.yml`, a verbatim copy of
+the finished workflow.
 
 ```yaml
 name: triage
@@ -157,15 +184,22 @@ cheaper and more explicit than relying on token semantics alone.
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r requirements.txt
+      - run: |
+          # YOU: install the project's Python dependencies, so
+          # triage.run's imports resolve on a bare Actions runner.
       - name: classify + route (phase 1)
         id: classify
         env:
           GH_TOKEN: ${{ github.token }}
           TRIAGE_RULEBOOK: solutions/rulebook.yaml
         run: |
-          python -m triage.run --event "$GITHUB_EVENT_PATH" \
-            --rulebook "$TRIAGE_RULEBOOK"
+          # YOU: invoke triage.run against the event payload GitHub
+          # hands this job in $GITHUB_EVENT_PATH, passing --rulebook
+          # so it classifies with the trained rulebook. This is the
+          # same call you already validated by hand in the dry-run
+          # above, just against $GITHUB_EVENT_PATH instead of a saved
+          # issue file. triage/run.py's own header docstring names the
+          # exact live-mode invocation.
 ```
 
 `issues: write` is the only elevated permission this job needs, and
@@ -174,7 +208,8 @@ comment. That token is scoped to this run and expires after the job
 finishes, no PAT, no secret to provision, which is why everything through
 this layer runs on the free tier with zero credentials beyond a GitHub
 account. `triage.run` writes `gate` and `service` to `$GITHUB_OUTPUT`,
-which the job exposes as outputs for the next job to read.
+which the job exposes as outputs for the next job to read, that part is
+given, in `main()`, not something you write.
 
 Layers 6 and 7 do add credentials, an API key and a token, and the rule
 for both is the same one worth internalizing now: a credential lives in
@@ -220,50 +255,29 @@ why and what it takes to turn on.
 
 The rulebook's output becomes labels, and those labels are the interface
 downstream tools, including the flywheel in layer 8, read. `build_labels`
-in `triage/run.py`:
-
-```python
-def build_labels(result, gate):
-    sev, _ = result["severity"]
-    svc, _ = result["service"]
-    route, _ = result["routing"]
-    labels = [f"sev:{sev}", f"route:{route}",
-              "triage:confident" if gate == "act" else "triage:investigating"]
-    if svc != "unknown":
-        labels.append(f"service:{svc}")
-    return labels
-```
-
-Four label families: `sev:S0` through `sev:S3`, `service:<name>`,
+is one of this chapter's two functions: given `classify()`'s result and
+the gate `decide()` already picked, it emits the label set. Its
+docstring in `triage/run.py` pins the shape: `sev:S0` through `sev:S3`,
+`service:<name>` (skipped when service is the `unknown` default),
 `route:internal|external|human`, and `triage:confident` or
-`triage:investigating`. Anyone, or anything, working the issue tracker
-can filter on these without parsing a comment.
+`triage:investigating` depending on which side of theta the gate landed.
+Four label families, no comment-parsing required, anyone, or anything,
+working the issue tracker can filter on these directly.
 
-The comment carries more than the labels can: a human-readable table plus
-a hidden machine-readable block above it.
-
-```python
-return f"""<!-- triage:v1 {json.dumps(machine)} -->
-### triage
-
-| dimension | call | confidence |
-|---|---|---|
-{rows}
-
-rules fired: {', '.join(f'`{f}`' for f in fired) if fired else 'none (defaults)'}
-
-{verdict}. want a deeper look either way? comment `/investigate` on this issue.
-"""
-```
-
-The HTML comment marker `triage:v1 {json}` is invisible when the comment renders on
-GitHub, but it is right there in the raw comment body
-for anything parsing the issue's activity to read. It carries the full
-decision: value and confidence per dimension, the gate, theta, which
-rules fired. Layer 7's flywheel reads this exact marker to diff what the
-bot decided at open time against what humans eventually decided at close
-time. The version number, `v1`, exists so a future format change does
-not silently break a parser reading old comments.
+The comment carries more than the labels can: a human-readable table
+plus a hidden machine-readable block above it. `build_comment`, the
+other function, assembles both. Its docstring walks the exact shape:
+a `machine` dict, `v`, `issue`, `decision` per dimension, `gate`,
+`theta`, `fired`, serialized to JSON and wrapped in an HTML comment
+tagged `triage:v1 {json}`. That marker is invisible when the comment
+renders on GitHub, but it sits right there in the raw comment body for
+anything parsing the issue's activity to read. Below the marker,
+`build_comment` also renders the readable table, a rules-fired line,
+and a verdict sentence keyed on the same gate. Layer 8's flywheel reads
+this exact marker to diff what the bot decided at open time against
+what humans eventually decided at close time. The version number, `v1`,
+exists so a future format change does not silently break a parser
+reading old comments.
 
 ## Seeding live issues
 
@@ -298,16 +312,31 @@ answer key and a live issue must not. Drop `--dry-run` against a repo you
 control, authed with `gh`, and each one opens for real, throttled a few
 seconds apart, and the triage workflow above fires on each as it lands.
 
+One gotcha if that repo is a fork: GitHub disables inherited workflows
+on forks until you opt in. Open the Actions tab and click the enable
+button, or nothing in this layer will ever fire.
+
+![The Actions tab on a fresh fork, workflows disabled until you click the enable button](../images/01-fork-actions-disabled.png)
+
 ## Checkpoint
 
-You should have run at least one issue through `triage.run --dry-run` and
-one through `triage.replay`, and be able to point at the exact line in
-`triage.yml` that decides whether phase 2 runs at all. Run
-`python tools/seed_issues.py --dry-run` and confirm you see ten curated
-issues, not the full corpus. If you have a repo to seed against, run it
-for real and watch the Actions tab: labels and a comment should land on
-each issue within one run, and the webhook case should visibly gate to
-investigate. Layer 5 builds what runs when it does.
+Run the gate:
+
+```bash
+python3 -m pytest tests/chapters/test_ch04.py -q
+```
+
+Eight green, none skipped. Then check the artifacts. Run at least one
+issue through `triage.run --dry-run` and confirm the labels and machine
+block match what's printed above, and one through `triage.replay`. Be
+able to point at the exact line in the workflow skeleton above, or the
+real `.github/workflows/triage.yml`, that decides whether phase 2 runs
+at all. Run `python tools/seed_issues.py --dry-run` and confirm you see
+ten curated issues, not the full corpus. If you have a repo to seed
+against, run it for real and watch the Actions tab: labels and a
+comment should land on each issue within one run, and the webhook case
+should visibly gate to investigate. Layer 5 builds what runs when it
+does.
 
 ## the heavy version
 

@@ -6,9 +6,25 @@ scratch, it's to turn every human correction into a training label. You
 build that mechanism yourself, in four steps, each one runnable and
 checkable on its own before you wire the next.
 
-`solutions/flywheel.py` is the finished version, for comparison after
-you've built it. Its four subcommands, `capture`, `accumulate`,
-`measure`, `suggest`, are the four steps below.
+Your working copy is `triage/flywheel.py`. The plumbing is given, the
+CLI, the live `gh` sweep, the corpus replay, because fetching issues is
+not the lesson. The four functions that are the lesson raise
+`NotImplementedError` until you write them: `diff`, `accumulate`,
+`measure`, `suggest`. Each one's docstring is its contract, and each
+step below is one of them. `solutions/flywheel.py` is the finished
+version, for comparison after you've built it, not before. The loop is
+the lesson.
+
+Your gate for this layer:
+
+```bash
+python3 -m pytest tests/chapters/test_ch08.py -q
+```
+
+On a fresh clone every test in it skips with "chapter 8 not started".
+As you land each step, its tests flip from skipped to green. All green
+means the flywheel is built and your numbers should match the ones
+printed below.
 
 ## the signal
 
@@ -22,11 +38,20 @@ a training label.
 
 ## step 1: capture
 
-Diff the bot's decision against the labels at close.
+Diff the bot's decision against the labels at close. The capture
+plumbing already walks closed issues (or replays the corpus) and hands
+each one to `diff`, the function you write. Open `triage/flywheel.py`,
+read `diff`'s docstring, and implement it: one correction record per
+dimension where the human's label at close disagrees with the bot's
+decision at open.
+
+Until `diff` exists the command below dies with
+`NotImplementedError: chapter 8`. That's the shape of this whole layer,
+the scaffold runs, the core is yours.
 
 ```bash
 rm -f triage/labels.jsonl
-python3 solutions/flywheel.py capture --simulate --year 2
+python3 -m triage.flywheel capture --simulate --year 2
 ```
 
 ```
@@ -51,10 +76,12 @@ write anything yet, that's step 2.
 ## step 2: accumulate
 
 Append the corrections to `triage/labels.jsonl`, the flywheel's
-training set.
+training set. Implement `accumulate` next. The docstring pins the two
+behaviors that matter: the dedup key is `(issue, dimension)`, and
+re-running is idempotent.
 
 ```bash
-python3 solutions/flywheel.py accumulate --simulate --year 2
+python3 -m triage.flywheel accumulate --simulate --year 2
 ```
 
 ```
@@ -66,10 +93,12 @@ dedupes on `(issue, dimension)` so re-running the sweep is safe.
 
 ## step 3: measure
 
-Fold the corrections back in and look at what they say.
+Fold the corrections back in and look at what they say. `measure` is
+an aggregation: read the file, bucket by dimension, count the
+bot-to-human pairs, print the biggest first.
 
 ```bash
-python3 solutions/flywheel.py measure
+python3 -m triage.flywheel measure
 ```
 
 ```
@@ -105,10 +134,14 @@ a pattern big enough to act on, which is what step 4 is for.
 ## step 4: suggest
 
 Cluster the corrections on the catalog signature they share, and
-propose the rule that's missing.
+propose the rule that's missing. `suggest` is the one function here
+with real moving parts, matching excerpts against the catalog's
+message templates and turning a big cluster into a rulebook-ready
+fragment. Its docstring walks the whole contract, including the
+placeholder-to-wildcard regex trick.
 
 ```bash
-python3 solutions/flywheel.py suggest
+python3 -m triage.flywheel suggest
 ```
 
 ```
@@ -232,12 +265,19 @@ left the file mid-experiment:
 
 ```bash
 rm -f triage/labels.jsonl
-python3 solutions/flywheel.py capture --simulate --year 2
-python3 solutions/flywheel.py accumulate --simulate --year 2
+python3 -m triage.flywheel capture --simulate --year 2
+python3 -m triage.flywheel accumulate --simulate --year 2
 ```
 
 ## checkpoint
 
+Run the gate:
+
+```bash
+python3 -m pytest tests/chapters/test_ch08.py -q
+```
+
+Nine green, none skipped. Then check the artifacts.
 You should now have `triage/labels.jsonl` holding 265 corrections from
 the year-2 simulation, a `measure` table showing where the rulebook and
 reality disagree, and a `suggest` output that names the exact rule

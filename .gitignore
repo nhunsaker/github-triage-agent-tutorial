@@ -13,3 +13,5 @@ data/materialized/
 
 # internal build plan, not part of the tutorial
 PLAN.md
+.DS_Store
+.venv/

@@ -1,15 +1,31 @@
 # Layer 5: the investigation
 
 Layer 3 trained a rulebook that hits a wall around 80%. Below the
-confidence gate, the bot should not guess. It should look. `triage/investigate.py`
-builds an evidence dossier with zero LLM calls: grep, git log, and a
-search over past issues. Evidence first, then hand off. Free tier, no
-PAT.
+confidence gate, the bot should not guess. It should look. That's
+`build_dossier()`: four evidence sources, then a hand-off offer, zero
+LLM calls. Free tier, no PAT.
+
+Your working copy is `triage/investigate.py`. The CLI, issue loading,
+the change-evidence and fleet-evidence sources, and the dossier
+rendering are given, plumbing gh events and formatting the
+machine-marker comment is not the lesson. The two functions that are
+the lesson raise `NotImplementedError` until you write them:
+`grep_code`, `catalog_prior`. Each one's docstring is its contract.
+`solutions/investigate.py` is the finished version, for comparison
+after you've built it, not before. The evidence trick is the lesson.
+
+Your gate for this layer:
+
+```bash
+python3 -m pytest tests/chapters/test_ch05.py -q
+```
+
+On a fresh clone every test in it skips with "chapter 5 not started".
+As you land each function, its tests flip from skipped to green.
 
 ## the four evidence sources
 
-Open `triage/investigate.py`. `build_dossier()` runs four checks in
-order.
+`build_dossier()` runs four checks in order.
 
 **1. code evidence.** `grep_code()` pulls the quoted error line out of
 the issue body, strips the parts that vary (ids, numbers, quoted
@@ -17,20 +33,22 @@ values), and greps `services/` for the stable words that remain. A
 filled-in id like `event_887a2` never appears in the source template,
 only the literal words around it do. That's the stable-fragment trick:
 match on what the code actually contains, not what the reporter typed
-in.
+in. Implement it and it must never hallucinate a location, every hit
+it returns has to trace back to a real `grep` match.
 
 **2. change evidence.** `recent_commits()` runs `git log --oneline -8`
 scoped to the suspect service directory. Did something ship there
-recently.
+recently. This one's given, read it for the pattern, you won't write
+it.
 
 **3. fleet evidence.** `fleet_check()` searches other issues for the
 same signature fragment. One report is an anecdote. Several in a
 window is a pattern, and the corroboration rule from layer 3 already
-told you why that distinction matters for routing.
+told you why that distinction matters for routing. Also given.
 
 **4. catalog prior.** `catalog_prior()` matches the signature back to
 `data/error_catalog.yaml` and reads its typical routing. This is the
-step that keeps the dossier honest.
+function you write, and it's the one that keeps the dossier honest.
 
 ## the catalog-prior lesson
 
@@ -42,7 +60,21 @@ difference because it records each signature's typical routing, so a
 match against an entry marked `external` overrides the naive "code
 found it, code owns it" read.
 
-Run it on a real corpus issue to see this play out.
+Open `triage/investigate.py` and read `catalog_prior`'s docstring.
+Each catalog entry's `message` field is a template with `{placeholder}`
+vars, the corpus generator fills those in when it writes an issue
+body, so the literal text you're matching against never appears
+verbatim in the catalog. The trick: escape the whole template with
+`re.escape`, then swap the now-escaped placeholder braces for a
+non-greedy wildcard. That turns `"stock below zero for sku {sku}"`
+into a pattern that matches the real, filled-in signature. Test
+catalog entries in order and return the first one that matches, first
+match wins, no scoring. Return the whole entry, callers cite its
+`file` and `symbol` straight from the catalog instead of re-deriving
+them.
+
+Once both functions are in place, run it on a real corpus issue to see
+this play out.
 
 ```bash
 grep -m1 'PayFlow API unreachable' data/issues/year2.ndjson > /tmp/ext.json
@@ -133,16 +165,26 @@ evidence dossier is not the same gate as confidence in the rulebook.
 The dossier can be sure of its hypothesis and still leave the door open,
 because a human or the coding agent might see something the four
 checks missed. Every dossier this script writes carries that line,
-unconditionally.
+unconditionally, and that part is given, `render()` is not one of the
+functions you write.
 
 ## checkpoint
 
-You should now see two dossiers, one that overrides its own code match
-with the catalog's external routing, one that pins an internal fault to
-a single line. Both end with the same handoff offer. `triage/run.py`
-calls this same `build_dossier()` path whenever the rulebook's
-confidence falls below theta, so the live workflow in layer 4 is
-already wired to produce this on real issues.
+Run the gate:
+
+```bash
+python3 -m pytest tests/chapters/test_ch05.py -q
+```
+
+All green means `grep_code` cites real, checked-in file paths and
+never invents one, and `catalog_prior` picks the right entry on a
+known signature, stays silent on a vague one, and resolves ties by
+catalog order. You should now see the two dossiers above, one that
+overrides its own code match with the catalog's external routing, one
+that pins an internal fault to a single line. Both end with the same
+handoff offer. `triage/run.py` calls this same `build_dossier()` path
+whenever the rulebook's confidence falls below theta, so the live
+workflow in layer 4 is already wired to produce this on real issues.
 
 ### the heavy version
 
