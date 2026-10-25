@@ -142,6 +142,13 @@ with those two blanked to `# YOU: ...`. Work out what each one runs,
 then check yourself against `solutions/triage.yml`, a verbatim copy of
 the finished workflow.
 
+One line in the real file differs from what you'll write: it runs
+`python -m "${TRIAGE_PKG}.run"` instead of `python -m triage.run`.
+`TRIAGE_PKG` comes from a repo variable, `TRIAGE_MODULE`, and falls back
+to `triage`. The demo repo sets it to `solutions` so its own live issues
+run the answer key. Your fork doesn't copy repo variables, so it runs
+the code you wrote here.
+
 ```yaml
 name: triage
 
@@ -180,8 +187,8 @@ cheaper and more explicit than relying on token semantics alone.
       gate: ${{ steps.classify.outputs.gate }}
       service: ${{ steps.classify.outputs.service }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: |

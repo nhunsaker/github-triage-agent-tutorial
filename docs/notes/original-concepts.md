@@ -10,7 +10,7 @@
 - **Job** — a unit of work that runs on a **runner** (a fresh VM: GitHub-hosted `ubuntu-latest`, or
   self-hosted).
 - **Step** — one thing in a job. Either runs shell (`run: python foo.py`) or **uses a reusable
-  action** (`uses: actions/checkout@v4`).
+  action** (`uses: actions/checkout@v5`).
 - **An action** (noun) — a packaged, reusable step someone published (checkout, setup-python, …).
 
 Model: **event → workflow → job(s) on a runner → steps.**
@@ -66,8 +66,8 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4          # the whole monorepo
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5          # the whole monorepo
+      - uses: actions/setup-python@v6
       - run: python scripts/triage.py       # your Python step (parse issue, decide scope, label)
       # then hand the issue to the Copilot coding agent:
       - run: gh issue edit ${{ github.event.issue.number }} --add-assignee "@copilot"

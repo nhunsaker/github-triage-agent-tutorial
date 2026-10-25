@@ -24,7 +24,7 @@ Here is the whole build on one page. Layers 3 and 4 build the top row,
 - **Job.** A unit of work that runs on a runner, a fresh VM. GitHub hosts
   `ubuntu-latest` for you, or you can bring your own.
 - **Step.** One thing inside a job. Either shell (`run: python foo.py`)
-  or a reusable action (`uses: actions/checkout@v4`).
+  or a reusable action (`uses: actions/checkout@v5`).
 - **An action** (the noun). A packaged, reusable step someone published:
   checkout, setup-python, and thousands more.
 
@@ -98,8 +98,8 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4          # the whole monorepo
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5          # the whole monorepo
+      - uses: actions/setup-python@v6
       - run: python scripts/triage.py       # your Python step (parse issue, decide scope, label)
       # then hand the issue to the Copilot coding agent:
       - run: gh issue edit ${{ github.event.issue.number }} --add-assignee "@copilot"

@@ -17,6 +17,13 @@ concurrency:
   group: triage-${{ github.event.issue.number }}
   cancel-in-progress: false
 
+# Which package runs the triage code. Your fork leaves this at "triage",
+# the code you write in chapters 4 to 8. The demo repo sets the repo
+# variable TRIAGE_MODULE=solutions so its live issues run the answer
+# key. Forks don't copy repo variables, so yours stays on "triage".
+env:
+  TRIAGE_PKG: ${{ vars.TRIAGE_MODULE || 'triage' }}
+
 jobs:
   triage:
     runs-on: ubuntu-latest
@@ -28,8 +35,8 @@ jobs:
       gate: ${{ steps.classify.outputs.gate }}
       service: ${{ steps.classify.outputs.service }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
@@ -39,7 +46,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TRIAGE_RULEBOOK: solutions/rulebook.yaml
         run: |
-          python -m triage.run --event "$GITHUB_EVENT_PATH" \
+          python -m "${TRIAGE_PKG}.run" --event "$GITHUB_EVENT_PATH" \
             --rulebook "$TRIAGE_RULEBOOK"
 
   investigate:
@@ -50,8 +57,8 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
@@ -59,7 +66,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python -m triage.investigate \
+          python -m "${TRIAGE_PKG}.investigate" \
             --event "$GITHUB_EVENT_PATH" \
             --service "${{ needs.triage.outputs.service }}" \
             --post
@@ -73,7 +80,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          python -m triage.investigate_llm \
+          python -m "${TRIAGE_PKG}.investigate_llm" \
             --event "$GITHUB_EVENT_PATH" \
             --service "${{ needs.triage.outputs.service }}" \
             --post
@@ -85,6 +92,6 @@ jobs:
       #   env:
       #     GH_TOKEN: ${{ secrets.TRIAGE_PAT }}
       #   run: |
-      #     python -m triage.assign_copilot \
+      #     python -m "${TRIAGE_PKG}.assign_copilot" \
       #       --issue "${{ github.event.issue.number }}" \
       #       --service "${{ needs.triage.outputs.service }}"
