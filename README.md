@@ -15,6 +15,14 @@ You train the rulebook yourself, wire it to Actions, watch it hit a
 wall around 80%, and build the flywheel that turns human corrections
 into rulebook improvements. The wall is the point.
 
+## see it run
+
+A new issue on this repo, triaged in under a minute: the Action labels
+it, the confidence gate trips, and the investigation posts its evidence
+for a human to decide on. 40 seconds, real footage of issue #17.
+
+https://github.com/user-attachments/assets/82bf56c2-ac05-4ffb-b6f7-49f96a43bdce
+
 ![The whole tutorial on one page: phase 1 classifies and routes, phase 2 investigates below the confidence gate, and the flywheel turns year-2 drift into the rule that fixes it](docs/images/tutorial-flow.png)
 
 ## how this tutorial works
