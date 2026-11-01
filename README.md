@@ -60,6 +60,40 @@ API key and a small per-issue spend. Layer 7 needs the Copilot seat.
 No other accounts. The payment vendor in the demo is fictional and
 stubbed locally.
 
+## fork it first
+
+The triage runs on GitHub, so you need your own copy of this repo, not
+just the code on your laptop. Fork it, then clone your fork:
+
+```bash
+gh repo fork nhunsaker/github-triage-agent-tutorial --clone
+cd github-triage-agent-tutorial
+```
+
+A fork copies the code and the workflow files, but not the repo
+settings. Do these once, in your fork:
+
+1. **Turn on Issues.** A fork starts with the Issues tab switched off.
+   Settings, General, Features, tick Issues.
+2. **Turn on Actions.** A fork starts with its workflows disabled. Open
+   the Actions tab and click the enable button.
+3. **Create the triage labels.** Labels don't copy over either. From
+   your clone, run `python tools/create_labels.py`.
+4. **Finish layer 4 before you open issues.** The workflow runs your
+   code in `triage/`, and until layer 4 that code is stubs, so an issue
+   opened earlier fails its run with `NotImplementedError: chapter 4`.
+   That is expected, not broken. To watch the finished version first,
+   point the workflow at the answer key with
+   `gh variable set TRIAGE_MODULE --body solutions`, and delete the
+   variable when you start building.
+5. **Add secrets later, only if you need them.** Nothing is copied from
+   this repo. Layer 6 wants an Anthropic key and layer 7 a GitHub token,
+   both added with `gh secret set` when you get there.
+
+A fork of a public repo stays public. To run this against private
+issues, create a new private repo and push your clone to it instead.
+The same five steps apply.
+
 ## never commit a token
 
 This tutorial has you handle two real credentials: an Anthropic API key
