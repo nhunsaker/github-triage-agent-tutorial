@@ -23,6 +23,17 @@ for a human to decide on. 40 seconds, real footage of issue #17.
 
 https://github.com/user-attachments/assets/82bf56c2-ac05-4ffb-b6f7-49f96a43bdce
 
+## the talk
+
+This tutorial is part 2 of "Automate the Queue", a talk at the Applied
+AI Conference in Saint Paul on Nov 2, 2026. Part 1 is the production
+story it comes from: an AI triage agent for a real support queue, what
+it got right, and where it hit the wall.
+
+[![Title slide of the talk "Automate the Queue: production lessons from an AI triage agent and how to build your own on GitHub", with a comic of a robot repairing a person whose arm is breaking into failed social posts](docs/images/talk-title-slide.jpg)](https://drive.google.com/file/d/1xUD5B1eG3YAn69K72oiz2eZnuke4ocML/view?usp=drive_link)
+
+[The slides (PDF)](https://drive.google.com/file/d/1xUD5B1eG3YAn69K72oiz2eZnuke4ocML/view?usp=drive_link)
+
 ![The whole tutorial on one page: phase 1 classifies and routes, phase 2 investigates below the confidence gate, and the flywheel turns year-2 drift into the rule that fixes it](docs/images/tutorial-flow.png)
 
 ## how this tutorial works
